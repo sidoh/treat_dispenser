@@ -18,10 +18,9 @@ AudioController::~AudioController() {
   delete audioOutput;
 }
 
-void AudioController::begin() {
+void AudioController::init() {
   pinMode(settings.audio.enable_pin, OUTPUT);
-  // disable();
-  enable();
+  disable();
 }
 
 void AudioController::enable() {

@@ -20,6 +20,8 @@ public:
   void disable();
   void enable();
 
+  void init();
+
 private:
   const Settings& settings;
 };

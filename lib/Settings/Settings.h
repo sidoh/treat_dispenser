@@ -28,7 +28,7 @@ public:
   persistentVar(
     CameraResolution,
     camera_resolution,
-    CameraResolution::d1600x1200,
+    CameraResolution::d800x600,
     {
       camera_resolution = CameraTypes::cameraResolutionFromStr(camera_resolutionString);
     },
@@ -95,6 +95,18 @@ public:
       rotation_directionString = MotorTypes::rotationDirectionToStr(rotation_direction);
     }
   );
+
+  persistentVar(
+    MicrostepResolution,
+    jitter_microstep_resolution,
+    MicrostepResolution::FULL,
+    {
+      jitter_microstep_resolution = MotorTypes::microstepResolutionFromStr(jitter_microstep_resolutionString);
+    },
+    {
+      jitter_microstep_resolutionString = MotorTypes::microstepResolutionToStr(jitter_microstep_resolution);
+    }
+  )
 };
 
 class AudioSettings : public Configuration {

@@ -23,7 +23,7 @@ public:
   ~AudioController();
 
   void playMP3FromSpiffs(const String& filename);
-  void begin();
+  void init();
   void loop();
   void enable();
   void disable();

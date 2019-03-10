@@ -195,6 +195,7 @@ ArRequestHandlerFunction HttpServer::handleGetCameraStill() {
     Stream& cameraStream = camera.openCaptureStream();
 
     auto* response = request->beginChunkedResponse("image/jpeg", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t { 
+
       for (size_t i = 0; i < maxLen; i++) {
         if (cameraStream.available()) {
           buffer[i] = cameraStream.read();

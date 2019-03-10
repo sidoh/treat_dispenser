@@ -57,6 +57,17 @@ void MotorController::continuousTurn(float numTurns, MicrostepResolution resolut
   }
 }
 
+void MotorController::init() {
+  pinMode(settings.motor.a4988.dir_pin, OUTPUT);
+  pinMode(settings.motor.a4988.en_pin, OUTPUT);
+  pinMode(settings.motor.a4988.ms1_pin, OUTPUT);
+  pinMode(settings.motor.a4988.ms2_pin, OUTPUT);
+  pinMode(settings.motor.a4988.ms3_pin, OUTPUT);
+  pinMode(settings.motor.a4988.step_pin, OUTPUT);
+
+  digitalWrite(settings.motor.a4988.en_pin, HIGH);
+}
+
 void MotorController::disable() {
   Serial.println(F("Disabling stepper"));
 
@@ -72,8 +83,8 @@ void MotorController::enable() {
 void MotorController::dispenseTurn() {
   // Jitter back and forth a few times to unstick
   for (size_t i = 0; i < settings.motor.dispense_jitter_count; ++i) {
-    continuousTurn(settings.motor.dispense_jitter_num_turns, MicrostepResolution::FULL, RotationDirection::CLOCKWISE);
-    continuousTurn(settings.motor.dispense_jitter_num_turns, MicrostepResolution::FULL, RotationDirection::COUNTERCLOCKWISE);
+    continuousTurn(settings.motor.dispense_jitter_num_turns, settings.motor.jitter_microstep_resolution, RotationDirection::CLOCKWISE);
+    continuousTurn(settings.motor.dispense_jitter_num_turns, settings.motor.jitter_microstep_resolution, RotationDirection::COUNTERCLOCKWISE);
   }
 
   continuousTurn(settings.motor.num_turns, settings.motor.microstep_resolution, settings.motor.rotation_direction);

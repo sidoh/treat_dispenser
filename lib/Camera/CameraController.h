@@ -2,6 +2,7 @@
 #include <MotorTypes.h>
 #include <Settings.h>
 #include <ArduCAM.h>
+#include <Wire.h>
 
 #define CAMERA_BUFFER_SIZE 128
 
@@ -34,12 +35,13 @@ public:
     volatile bool isOpen;
   };
 
-  CameraController(Settings& settings, ArduCAM& camera);
+  CameraController(Settings& settings);
 
   CameraController::CameraStream& openCaptureStream();
+  void init();
 
 private:
-  ArduCAM& camera;
+  ArduCAM camera;
   Settings& settings;
 
   CameraStream captureStream;
