@@ -24,10 +24,12 @@ public:
     static void taskImpl(void*);
     void taskImpl();
 
-    void reset();
+    void open();
+    void close();
   private:
     ArduCAM& camera;
     uint8_t buffer[CAMERA_BUFFER_SIZE];
+    SemaphoreHandle_t cameraLock;
 
     volatile size_t bufferIx;
     volatile size_t bufferLen;

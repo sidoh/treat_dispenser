@@ -4,7 +4,7 @@
 #include <MotorControler.h>
 #include <CameraController.h>
 #include <AudioController.h>
-#include <PatternHandler.h>
+#include <PathVariableHandler.h>
 
 #if defined(ESP32)
 extern "C" {
@@ -41,8 +41,8 @@ private:
   ArBodyHandlerFunction    handlePostMotorCommand();
 
   // Audio
-  PatternHandler::TPatternHandlerFn handleDeleteSound();
-  PatternHandler::TPatternHandlerFn handleShowSound();
+  PathVariableHandler::TPathVariableHandlerFn handleDeleteSound();
+  PathVariableHandler::TPathVariableHandlerFn handleShowSound();
   ArBodyHandlerFunction             handlePostAudioCommand();
 
   // OTA updates
@@ -104,8 +104,8 @@ private:
   bool isAuthenticated(AsyncWebServerRequest* request);
 
   // Support for routes with tokens like a/:id/:id2. Injects auth handling.
-  void onPattern(const String& pattern, const WebRequestMethod method, PatternHandler::TPatternHandlerFn fn);
-  void onPattern(const String& pattern, const WebRequestMethod method, PatternHandler::TPatternHandlerBodyFn fn);
+  void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerFn fn);
+  void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerBodyFn fn);
 
   // Injects auth handling
   void on(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction fn);

@@ -18,7 +18,7 @@ CameraController::CameraController(Settings& settings)
 }
 
 CameraController::CameraStream& CameraController::openCaptureStream() {
-  captureStream.reset();
+  captureStream.open();
   return captureStream;
 }
 
@@ -108,7 +108,7 @@ void CameraController::CameraStream::taskImpl() {
 
       bufferIx = 0;
     } else {
-      vTaskDelay(1 * portTICK_PERIOD_MS);
+      vTaskDelay(portTICK_PERIOD_MS / 10);
     }
   }
 }
@@ -117,9 +117,17 @@ CameraController::CameraStream::CameraStream(ArduCAM& camera)
   : bufferIx(CAMERA_BUFFER_SIZE),
     camera(camera),
     bytesRemaining(0)
-{ }
+{ 
+  cameraLock = xSemaphoreCreateMutex();
+}
 
-void CameraController::CameraStream::reset() {
+void CameraController::CameraStream::close() {
+  // xSemaphoreGive(cameraLock);
+}
+
+void CameraController::CameraStream::open() {
+  // xSemaphoreTake(cameraLock, portMAX_DELAY);
+
   camera.flush_fifo();
   camera.clear_fifo_flag();
   camera.start_capture();

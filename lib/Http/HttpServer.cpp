@@ -14,7 +14,7 @@ static const char TEXT_PLAIN[] = "text/plain";
 
 static const char JPEG_CONTENT_TYPE_HEADER[] PROGMEM = "--frame\r\nContent-Type: image/jpeg\r\n\r\n";
 
-HttpServer::HttpServer(Settings& settings, CameraController& camera, MotorController& motor, AudioController& audio) 
+HttpServer::HttpServer(Settings& settings, CameraController& camera, MotorController& motor, AudioController& audio)
   : audio(audio),
     camera(camera),
     motor(motor),
@@ -92,7 +92,7 @@ ArUploadHandlerFunction HttpServer::handleOtaUpdate() {
   };
 }
 
-PatternHandler::TPatternHandlerFn HttpServer::handleShowSound() {
+PathVariableHandler::TPathVariableHandlerFn HttpServer::handleShowSound() {
   return [this](const UrlTokenBindings* bindings, AsyncWebServerRequest* request) {
     if (bindings->hasBinding("filename")) {
       const char* filename = bindings->get("filename");
@@ -105,7 +105,7 @@ PatternHandler::TPatternHandlerFn HttpServer::handleShowSound() {
   };
 }
 
-PatternHandler::TPatternHandlerFn HttpServer::handleDeleteSound() {
+PathVariableHandler::TPathVariableHandlerFn HttpServer::handleDeleteSound() {
   return [this](const UrlTokenBindings* bindings, AsyncWebServerRequest* request) {
     if (bindings->hasBinding("filename")) {
       const char* filename = bindings->get("filename");
@@ -168,7 +168,7 @@ ArRequestHandlerFunction HttpServer::handleGetCameraStream() {
   return [this](AsyncWebServerRequest* request) {
     CameraController::CameraStream& cameraStream = camera.openCaptureStream();
 
-    auto* response = request->beginChunkedResponse("multipart/x-mixed-replace; boundary=frame", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t { 
+    auto* response = request->beginChunkedResponse("multipart/x-mixed-replace; boundary=frame", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
       size_t i = 0;
 
       if (index == 0 || !cameraStream.available()) {
@@ -177,7 +177,8 @@ ArRequestHandlerFunction HttpServer::handleGetCameraStream() {
       }
 
       if (!cameraStream.available()) {
-        cameraStream.reset();
+        cameraStream.close();
+        cameraStream.open();
       }
 
       for (; i < maxLen && cameraStream.available(); i++) {
@@ -192,14 +193,14 @@ ArRequestHandlerFunction HttpServer::handleGetCameraStream() {
 }
 ArRequestHandlerFunction HttpServer::handleGetCameraStill() {
   return [this](AsyncWebServerRequest* request) {
-    Stream& cameraStream = camera.openCaptureStream();
+    CameraController::CameraStream& cameraStream = camera.openCaptureStream();
 
-    auto* response = request->beginChunkedResponse("image/jpeg", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t { 
-
+    auto* response = request->beginChunkedResponse("image/jpeg", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
       for (size_t i = 0; i < maxLen; i++) {
         if (cameraStream.available()) {
           buffer[i] = cameraStream.read();
         } else {
+          cameraStream.close();
           return i;
         }
       }
@@ -508,18 +509,18 @@ ArRequestHandlerFunction HttpServer::handleListDirectory(const char* dirName) {
   };
 }
 
-void HttpServer::onPattern(const String& pattern, const WebRequestMethod method, PatternHandler::TPatternHandlerFn fn) {
-  PatternHandler::TPatternHandlerFn authedFn = [this, fn](const UrlTokenBindings* b, AsyncWebServerRequest* request) {
+void HttpServer::onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerFn fn) {
+  PathVariableHandler::TPathVariableHandlerFn authedFn = [this, fn](const UrlTokenBindings* b, AsyncWebServerRequest* request) {
     if (isAuthenticated(request)) {
       fn(b, request);
     }
   };
 
-  server.addHandler(new PatternHandler(pattern.c_str(), method, authedFn, NULL));
+  server.addHandler(new PathVariableHandler(pattern.c_str(), method, authedFn, NULL));
 }
 
-void HttpServer::onPattern(const String& pattern, const WebRequestMethod method, PatternHandler::TPatternHandlerBodyFn fn) {
-  PatternHandler::TPatternHandlerBodyFn authedFn = [this, fn](
+void HttpServer::onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerBodyFn fn) {
+  PathVariableHandler::TPathVariableHandlerBodyFn authedFn = [this, fn](
     const UrlTokenBindings* bindings,
     AsyncWebServerRequest* request,
     uint8_t* data,
@@ -532,5 +533,5 @@ void HttpServer::onPattern(const String& pattern, const WebRequestMethod method,
     }
   };
 
-  server.addHandler(new PatternHandler(pattern.c_str(), method, NULL, authedFn));
+  server.addHandler(new PathVariableHandler(pattern.c_str(), method, NULL, authedFn));
 }
