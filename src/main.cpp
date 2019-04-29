@@ -42,6 +42,9 @@ void setup() {
   wifiManager.autoConnect();
 
   httpServer.begin();
+
+  disableLoopWDT();
+  disableCore0WDT();
 }
 
 time_t lastS = 0;

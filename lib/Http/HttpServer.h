@@ -5,6 +5,7 @@
 #include <CameraController.h>
 #include <AudioController.h>
 #include <PathVariableHandler.h>
+#include <RichHttpServer.h>
 
 #if defined(ESP32)
 extern "C" {
@@ -22,96 +23,80 @@ public:
   void begin();
 
 private:
-  AsyncWebServer server;
+  RichHttpServer server;
   Settings& settings;
   MotorController& motor;
   CameraController& camera;
   AudioController& audio;
 
+  void staticResponse(AsyncWebServerRequest*, const char* contentType, const char* response);
+  void noOpHandler(AsyncWebServerRequest*);
+
   // Settings CRUD
   String getSettingsBody();
-  ArBodyHandlerFunction    handleUpdateSettings();
-  ArRequestHandlerFunction handleListSettings();
+  void handleUpdateSettings(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total
+  );
+  void handleListSettings(AsyncWebServerRequest*);
 
   // Camera
-  ArRequestHandlerFunction handleGetCameraStill();
-  ArRequestHandlerFunction handleGetCameraStream();
+  void handleGetCameraStill(AsyncWebServerRequest*);
+  void handleGetCameraStream(AsyncWebServerRequest*);
 
   // Motor
-  ArBodyHandlerFunction    handlePostMotorCommand();
+  void handlePostMotorCommand(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total
+  );
 
   // Audio
-  PathVariableHandler::TPathVariableHandlerFn handleDeleteSound();
-  PathVariableHandler::TPathVariableHandlerFn handleShowSound();
-  ArBodyHandlerFunction             handlePostAudioCommand();
+  void handleDeleteSound(AsyncWebServerRequest*, const UrlTokenBindings*);
+  void handleShowSound(AsyncWebServerRequest*, const UrlTokenBindings*);
+  void handlePostAudioCommand(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total);
 
   // OTA updates
-  ArUploadHandlerFunction  handleOtaUpdate();
-  ArRequestHandlerFunction handleOtaSuccess();
-
-  class BodyHandler : public AsyncWebHandler {
-  public:
-    BodyHandler(const char* uri, const WebRequestMethod method, ArBodyHandlerFunction handler);
-    ~BodyHandler();
-
-    virtual bool isRequestHandlerTrivial() override { return false; }
-    virtual bool canHandle(AsyncWebServerRequest* request) override;
-    virtual void handleRequest(AsyncWebServerRequest* request) override;
-    virtual void handleBody(
-      AsyncWebServerRequest *request,
-      uint8_t *data,
-      size_t len,
-      size_t index,
-      size_t total
-    ) override;
-
-  private:
-    char* uri;
-    const WebRequestMethod method;
-    ArBodyHandlerFunction handler;
-  };
-
-  class UploadHandler : public AsyncWebHandler {
-  public:
-    UploadHandler(const char* uri, const WebRequestMethod method, ArUploadHandlerFunction handler);
-    UploadHandler(const char* uri, const WebRequestMethod method, ArRequestHandlerFunction onCompleteFn, ArUploadHandlerFunction handler);
-    ~UploadHandler();
-
-    virtual bool isRequestHandlerTrivial() override { return false; }
-    virtual bool canHandle(AsyncWebServerRequest* request) override;
-    virtual void handleRequest(AsyncWebServerRequest* request) override;
-    virtual void handleUpload(
-      AsyncWebServerRequest *request,
-      const String& filename,
-      size_t index,
-      uint8_t *data,
-      size_t len,
-      bool isFinal
-    ) override;
-
-  private:
-    char* uri;
-    const WebRequestMethod method;
-    ArUploadHandlerFunction handler;
-    ArRequestHandlerFunction onCompleteFn;
-  };
+  void handleOtaUpdate(
+    AsyncWebServerRequest *request,
+    const String &filename,
+    size_t index,
+    uint8_t *data,
+    size_t len,
+    bool isFinal,
+    const UrlTokenBindings* bindings
+  );
+  void handleOtaSuccess(AsyncWebServerRequest*, const UrlTokenBindings* bindings);
 
   // General helpers
-  ArRequestHandlerFunction handleListDirectory(const char* dir);
-  ArUploadHandlerFunction  handleCreateFile(const char* filePrefix);
+  void handleListDirectory(AsyncWebServerRequest*, const char* dir);
+  void handleCreateFile(
+    const char* filePrefix,
+    AsyncWebServerRequest *request,
+    const String& filename,
+    size_t index,
+    uint8_t *data,
+    size_t len,
+    bool isFinal
+  );
 
   // Checks if auth is enabled, and requires appropriate username/password if so
   bool isAuthenticated(AsyncWebServerRequest* request);
 
   // Support for routes with tokens like a/:id/:id2. Injects auth handling.
-  void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerFn fn);
-  void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerBodyFn fn);
+  // void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerFn fn);
+  // void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerBodyFn fn);
 
   // Injects auth handling
-  void on(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction fn);
-  void on(const String& pattern, const WebRequestMethod method, ArBodyHandlerFunction fn);
-  void onUpload(const String& pattern, const WebRequestMethod method, ArUploadHandlerFunction uploadFn);
-  void onUpload(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction onCompleteFn, ArUploadHandlerFunction uploadFn);
+  // void on(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction fn);
+  // void on(const String& pattern, const WebRequestMethod method, ArBodyHandlerFunction fn);
+  // void onUpload(const String& pattern, const WebRequestMethod method, ArUploadHandlerFunction uploadFn);
+  // void onUpload(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction onCompleteFn, ArUploadHandlerFunction uploadFn);
 };
 
 #endif

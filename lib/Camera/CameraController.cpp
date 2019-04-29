@@ -1,11 +1,14 @@
 #include <CameraController.h>
 #include <SPI.h>
 
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
+
 CameraController::CameraController(Settings& settings)
   : camera(ArduCAM(OV2640, SS)),
     settings(settings),
     captureStream(CameraStream(camera))
-{ 
+{
   TaskHandle_t xHandle = NULL;
   xTaskCreate(
     &captureStream.taskImpl,
@@ -93,6 +96,9 @@ void CameraController::CameraStream::taskImpl(void* _this) {
 }
 
 void CameraController::CameraStream::taskImpl() {
+  TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
+  TIMERG0.wdt_feed=1;
+  TIMERG0.wdt_wprotect=0;
   while (1) {
     if (isOpen && bufferIx >= CAMERA_BUFFER_SIZE && this->bytesRemaining > 0) {
       size_t toRead = std::min((size_t)CAMERA_BUFFER_SIZE, (size_t)this->bytesRemaining);
@@ -113,11 +119,11 @@ void CameraController::CameraStream::taskImpl() {
   }
 }
 
-CameraController::CameraStream::CameraStream(ArduCAM& camera) 
+CameraController::CameraStream::CameraStream(ArduCAM& camera)
   : bufferIx(CAMERA_BUFFER_SIZE),
     camera(camera),
     bytesRemaining(0)
-{ 
+{
   cameraLock = xSemaphoreCreateMutex();
 }
 
