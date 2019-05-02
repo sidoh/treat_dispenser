@@ -20,7 +20,7 @@ HttpServer::HttpServer(Settings& settings, CameraController& camera, MotorContro
   : audio(audio),
     camera(camera),
     motor(motor),
-    server(RichHttpServer(settings.http.port)),
+    server(RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer>(settings.http.port)),
     settings(settings)
 { }
 
@@ -28,23 +28,23 @@ void HttpServer::begin() {
   server
     .buildHandler("/settings")
     .on(HTTP_GET, std::bind(&HttpServer::handleListSettings, this, _1))
-    .on(
+    .onBody(
       HTTP_PUT,
-      std::bind(&HttpServer::noOpHandler, this, _1),
-      std::bind(&HttpServer::handleUpdateSettings, this, _1, _2, _3, _4, _5)
+      std::bind(&HttpServer::handleUpdateSettings, this, _1, _3, _4, _5, _6)
     );
 
   server
-    .buildHandler("/camera")
-    .on(HTTP_GET, "/snapshot.jpg", std::bind(&HttpServer::handleGetCameraStill, this, _1))
-    .on(HTTP_GET, "/stream.mjpg", std::bind(&HttpServer::handleGetCameraStream, this, _1));
+    .buildHandler("/camera/snapshot.jpg")
+    .on(HTTP_GET, std::bind(&HttpServer::handleGetCameraStill, this, _1));
+  server
+    .buildHandler("/camera/stream.mjpg")
+    .on(HTTP_GET, std::bind(&HttpServer::handleGetCameraStream, this, _1));
 
   server
     .buildHandler("/motor/commands")
-    .on(
+    .onBody(
       HTTP_POST,
-      std::bind(&HttpServer::noOpHandler, this, _1),
-      std::bind(&HttpServer::handlePostMotorCommand, this, _1, _2, _3, _4, _5)
+      std::bind(&HttpServer::handlePostMotorCommand, this, _1, _3, _4, _5, _6)
     );
 
   server
@@ -56,26 +56,23 @@ void HttpServer::begin() {
   server
     .buildHandler("/sounds")
     .on(HTTP_GET, std::bind(&HttpServer::handleListDirectory, this, _1, SOUNDS_DIRECTORY))
-    .on(
-      HTTP_POST,
+    .onUpload(
       std::bind(&HttpServer::staticResponse, this, _1, TEXT_PLAIN, "success"),
-      std::bind(&HttpServer::handleCreateFile, this, SOUNDS_DIRECTORY, _1, _2, _3, _4, _5, _6)
+      std::bind(&HttpServer::handleCreateFile, this, SOUNDS_DIRECTORY, _1, _3, _4, _5, _6, _7)
     );
 
   server
     .buildHandler("/firmware")
-    .on(
-      HTTP_POST,
-      std::bind(&HttpServer::handleOtaSuccess, this, _1, _2),
-      std::bind(&HttpServer::handleOtaUpdate, this, _1, _2, _3, _4, _5, _6, _7)
+    .onUpload(
+      std::bind(&HttpServer::handleOtaSuccess, this, _1),
+      std::bind(&HttpServer::handleOtaUpdate, this, _1, _3, _4, _5, _6, _7)
     );
 
   server
     .buildHandler("/audio/commands")
-    .on(
+    .onBody(
       HTTP_POST,
-      std::bind(&HttpServer::staticResponse, this, _1, TEXT_PLAIN, "success"),
-      std::bind(&HttpServer::handlePostAudioCommand, this, _1, _2, _3, _4, _5)
+      std::bind(&HttpServer::handlePostAudioCommand, this, _1, _3, _4, _5, _6)
     );
 
   server.begin();
@@ -87,7 +84,7 @@ void HttpServer::staticResponse(AsyncWebServerRequest* request, const char* resp
 
 void HttpServer::noOpHandler(AsyncWebServerRequest* request) { }
 
-void HttpServer::handleOtaSuccess(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
+void HttpServer::handleOtaSuccess(AsyncWebServerRequest* request) {
   request->send_P(200, TEXT_PLAIN, PSTR("Update successful.  Device will now reboot.\n\n"));
 
   delay(1000);
@@ -101,8 +98,7 @@ void HttpServer::handleOtaUpdate(
   size_t index,
   uint8_t *data,
   size_t len,
-  bool isFinal,
-  const UrlTokenBindings* bindings
+  bool isFinal
 ) {
   if (index == 0) {
     if (request->contentLength() > 0) {

@@ -4,7 +4,6 @@
 #include <MotorControler.h>
 #include <CameraController.h>
 #include <AudioController.h>
-#include <PathVariableHandler.h>
 #include <RichHttpServer.h>
 
 #if defined(ESP32)
@@ -23,7 +22,7 @@ public:
   void begin();
 
 private:
-  RichHttpServer server;
+  RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer> server;
   Settings& settings;
   MotorController& motor;
   CameraController& camera;
@@ -68,10 +67,9 @@ private:
     size_t index,
     uint8_t *data,
     size_t len,
-    bool isFinal,
-    const UrlTokenBindings* bindings
+    bool isFinal
   );
-  void handleOtaSuccess(AsyncWebServerRequest*, const UrlTokenBindings* bindings);
+  void handleOtaSuccess(AsyncWebServerRequest*);
 
   // General helpers
   void handleListDirectory(AsyncWebServerRequest*, const char* dir);
