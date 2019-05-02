@@ -75,6 +75,7 @@ void HttpServer::begin() {
       std::bind(&HttpServer::handlePostAudioCommand, this, _1, _3, _4, _5, _6)
     );
 
+  server.clearBuilders();
   server.begin();
 }
 
