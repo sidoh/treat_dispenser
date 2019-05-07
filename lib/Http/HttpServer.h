@@ -15,6 +15,9 @@ extern "C" {
 #ifndef _HTTP_SERVER_H
 #define _HTTP_SERVER_H
 
+using RichHttpConfig = RichHttp::Generics::Configs::AsyncWebServer;
+using RequestContext = RichHttpConfig::RequestContextType;
+
 class HttpServer {
 public:
   HttpServer(Settings& settings, CameraController& camera, MotorController& motor, AudioController& audio);
@@ -22,79 +25,32 @@ public:
   void begin();
 
 private:
-  RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer> server;
+  RichHttpServer<RichHttpConfig> server;
   Settings& settings;
   MotorController& motor;
   CameraController& camera;
   AudioController& audio;
 
-  void staticResponse(AsyncWebServerRequest*, const char* contentType, const char* response);
-  void noOpHandler(AsyncWebServerRequest*);
-
   // Settings CRUD
   String getSettingsBody();
-  void handleUpdateSettings(
-    AsyncWebServerRequest* request,
-    uint8_t* data,
-    size_t len,
-    size_t index,
-    size_t total
-  );
-  void handleListSettings(AsyncWebServerRequest*);
+  void handleUpdateSettings(RequestContext& request);
+  void handleListSettings(RequestContext& request);
 
   // Camera
-  void handleGetCameraStill(AsyncWebServerRequest*);
-  void handleGetCameraStream(AsyncWebServerRequest*);
+  void handleGetCameraStill(RequestContext& request);
+  void handleGetCameraStream(RequestContext& request);
 
   // Motor
-  void handlePostMotorCommand(
-    AsyncWebServerRequest* request,
-    uint8_t* data,
-    size_t len,
-    size_t index,
-    size_t total
-  );
+  void handlePostMotorCommand(RequestContext& request);
 
   // Audio
-  void handleDeleteSound(AsyncWebServerRequest*, const UrlTokenBindings*);
-  void handleShowSound(AsyncWebServerRequest*, const UrlTokenBindings*);
-  void handlePostAudioCommand(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total);
-
-  // OTA updates
-  void handleOtaUpdate(
-    AsyncWebServerRequest *request,
-    const String &filename,
-    size_t index,
-    uint8_t *data,
-    size_t len,
-    bool isFinal
-  );
-  void handleOtaSuccess(AsyncWebServerRequest*);
+  void handleDeleteSound(RequestContext& request);
+  void handleShowSound(RequestContext& request);
+  void handlePostAudioCommand(RequestContext& request);
 
   // General helpers
-  void handleListDirectory(AsyncWebServerRequest*, const char* dir);
-  void handleCreateFile(
-    const char* filePrefix,
-    AsyncWebServerRequest *request,
-    const String& filename,
-    size_t index,
-    uint8_t *data,
-    size_t len,
-    bool isFinal
-  );
-
-  // Checks if auth is enabled, and requires appropriate username/password if so
-  bool isAuthenticated(AsyncWebServerRequest* request);
-
-  // Support for routes with tokens like a/:id/:id2. Injects auth handling.
-  // void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerFn fn);
-  // void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerBodyFn fn);
-
-  // Injects auth handling
-  // void on(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction fn);
-  // void on(const String& pattern, const WebRequestMethod method, ArBodyHandlerFunction fn);
-  // void onUpload(const String& pattern, const WebRequestMethod method, ArUploadHandlerFunction uploadFn);
-  // void onUpload(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction onCompleteFn, ArUploadHandlerFunction uploadFn);
+  void handleListDirectory(const char* dir, RequestContext& request);
+  void handleCreateFile(const char* filePrefix, RequestContext& request);
 };
 
 #endif

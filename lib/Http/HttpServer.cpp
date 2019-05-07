@@ -20,7 +20,7 @@ HttpServer::HttpServer(Settings& settings, CameraController& camera, MotorContro
   : audio(audio),
     camera(camera),
     motor(motor),
-    server(RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer>(settings.http.port)),
+    server(RichHttpServer<RichHttpConfig>(settings.http.port)),
     settings(settings)
 { }
 
@@ -28,10 +28,7 @@ void HttpServer::begin() {
   server
     .buildHandler("/settings")
     .on(HTTP_GET, std::bind(&HttpServer::handleListSettings, this, _1))
-    .onBody(
-      HTTP_PUT,
-      std::bind(&HttpServer::handleUpdateSettings, this, _1, _3, _4, _5, _6)
-    );
+    .on(HTTP_PUT, std::bind(&HttpServer::handleUpdateSettings, this, _1));
 
   server
     .buildHandler("/camera/snapshot.jpg")
@@ -42,155 +39,82 @@ void HttpServer::begin() {
 
   server
     .buildHandler("/motor/commands")
-    .onBody(
-      HTTP_POST,
-      std::bind(&HttpServer::handlePostMotorCommand, this, _1, _3, _4, _5, _6)
-    );
+    .on(HTTP_POST, std::bind(&HttpServer::handlePostMotorCommand, this, _1));
 
   server
     .buildHandler("/sounds/:filename")
-    .on(HTTP_DELETE, std::bind(&HttpServer::handleDeleteSound, this, _1, _2))
-    .on(HTTP_GET, std::bind(&HttpServer::handleShowSound, this, _1, _2));
+    .on(HTTP_DELETE, std::bind(&HttpServer::handleDeleteSound, this, _1))
+    .on(HTTP_GET, std::bind(&HttpServer::handleShowSound, this, _1));
 
   // Must go last, or it'll match /sounds/XXX
   server
     .buildHandler("/sounds")
-    .on(HTTP_GET, std::bind(&HttpServer::handleListDirectory, this, _1, SOUNDS_DIRECTORY))
-    .onUpload(
-      std::bind(&HttpServer::staticResponse, this, _1, TEXT_PLAIN, "success"),
-      std::bind(&HttpServer::handleCreateFile, this, SOUNDS_DIRECTORY, _1, _3, _4, _5, _6, _7)
-    );
+    .on(HTTP_GET, std::bind(&HttpServer::handleListDirectory, this, SOUNDS_DIRECTORY, _1))
+    .on(HTTP_POST, std::bind(&HttpServer::handleCreateFile, this, SOUNDS_DIRECTORY, _1));
 
   server
     .buildHandler("/firmware")
-    .onUpload(
-      std::bind(&HttpServer::handleOtaSuccess, this, _1),
-      std::bind(&HttpServer::handleOtaUpdate, this, _1, _3, _4, _5, _6, _7)
-    );
+    .handleOTA();
 
   server
     .buildHandler("/audio/commands")
-    .onBody(
-      HTTP_POST,
-      std::bind(&HttpServer::handlePostAudioCommand, this, _1, _3, _4, _5, _6)
-    );
+    .on(HTTP_POST, std::bind(&HttpServer::handlePostAudioCommand, this, _1));
 
   server.clearBuilders();
   server.begin();
 }
 
-void HttpServer::staticResponse(AsyncWebServerRequest* request, const char* responseType, const char* response) {
-  request->send(200, responseType, response);
+void HttpServer::handleShowSound(RequestContext& request) {
+  const char* filename = request.pathVariables.get("filename");
+  String path = String(SOUNDS_DIRECTORY) + "/" + filename;
+  request.rawRequest->send(SPIFFS, path, F("audio/mpeg"));
 }
 
-void HttpServer::noOpHandler(AsyncWebServerRequest* request) { }
+void HttpServer::handleDeleteSound(RequestContext& request) {
+  const char* filename = request.pathVariables.get("filename");
+  String path = String(SOUNDS_DIRECTORY) + "/" + filename;
 
-void HttpServer::handleOtaSuccess(AsyncWebServerRequest* request) {
-  request->send_P(200, TEXT_PLAIN, PSTR("Update successful.  Device will now reboot.\n\n"));
-
-  delay(1000);
-
-  ESP.restart();
-}
-
-void HttpServer::handleOtaUpdate(
-  AsyncWebServerRequest *request,
-  const String &filename,
-  size_t index,
-  uint8_t *data,
-  size_t len,
-  bool isFinal
-) {
-  if (index == 0) {
-    if (request->contentLength() > 0) {
-      Update.begin(request->contentLength());
+  if (SPIFFS.exists(path)) {
+    if (SPIFFS.remove(path)) {
+      request.response.json["success"] = true;
     } else {
-      Serial.println(F("OTA Update: ERROR - Content-Length header required, but not present."));
-    }
-  }
-
-  if (Update.size() > 0) {
-    if (Update.write(data, len) != len) {
-      Update.printError(Serial);
-
-#if defined(ESP32)
-      Update.abort();
-#endif
-    }
-
-    if (isFinal) {
-      if (!Update.end(true)) {
-        Update.printError(Serial);
-#if defined(ESP32)
-        Update.abort();
-#endif
-      }
-    }
-  }
-}
-
-void HttpServer::handleShowSound(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
-  if (bindings->hasBinding("filename")) {
-    const char* filename = bindings->get("filename");
-    String path = String(SOUNDS_DIRECTORY) + "/" + filename;
-
-    request->send(SPIFFS, path, "audio/mpeg");
-  } else {
-    request->send_P(400, TEXT_PLAIN, PSTR("You must provide a filename"));
-  }
-}
-
-void HttpServer::handleDeleteSound(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
-  if (bindings->hasBinding("filename")) {
-    const char* filename = bindings->get("filename");
-    String path = String(SOUNDS_DIRECTORY) + "/" + filename;
-
-    if (SPIFFS.exists(path)) {
-      if (SPIFFS.remove(path)) {
-        request->send_P(200, TEXT_PLAIN, PSTR("success"));
-      } else {
-        request->send_P(500, TEXT_PLAIN, PSTR("Failed to delete file"));
-      }
-    } else {
-      request->send(404, TEXT_PLAIN);
+      request.response.setCode(500);
+      request.response.json["success"] = false;
+      request.response.json["error"] = F("Failed to delete file");
     }
   } else {
-    request->send_P(400, TEXT_PLAIN, PSTR("You must provide a filename"));
+    request.response.setCode(404);
+    request.response.json["success"] = false;
+    request.response.json["error"] = F("File not found");
   }
 }
 
-void HttpServer::handlePostMotorCommand(
-  AsyncWebServerRequest* request,
-  uint8_t* data,
-  size_t len,
-  size_t index,
-  size_t total
-){
-  DynamicJsonBuffer buffer;
-  JsonObject& body = buffer.parse(data);
+void HttpServer::handlePostMotorCommand(RequestContext& request) {
+  JsonObject body = request.getJsonBody().as<JsonObject>();
 
   if (motor.jsonCommand(body)) {
-    request->send(200);
+    request.response.json["success"] = true;
   } else {
-    request->send_P(400, TEXT_PLAIN, PSTR("Invalid command"));
+    request.response.setCode(400);
+    request.response.json["error"] = "Invalid command";
   }
 }
 
-void HttpServer::handlePostAudioCommand(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-  DynamicJsonBuffer buffer;
-  JsonObject& body = buffer.parse(data);
+void HttpServer::handlePostAudioCommand(RequestContext& request) {
+  JsonObject body = request.getJsonBody().as<JsonObject>();
 
   if (audio.handleCommand(body)) {
-    request->send(200);
+    request.response.json["success"] = true;
   } else {
-    request->send_P(400, TEXT_PLAIN, PSTR("Invalid command"));
+    request.response.json["error"] = F("Invalid command");
+    request.response.setCode(400);
   }
 }
 
-void HttpServer::handleGetCameraStream(AsyncWebServerRequest* request) {
+void HttpServer::handleGetCameraStream(RequestContext& request) {
   CameraController::CameraStream& cameraStream = camera.openCaptureStream();
 
-  auto* response = request->beginChunkedResponse("multipart/x-mixed-replace; boundary=frame", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+  auto* response = request.rawRequest->beginChunkedResponse("multipart/x-mixed-replace; boundary=frame", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
     size_t i = 0;
 
     if (index == 0 || !cameraStream.available()) {
@@ -210,13 +134,13 @@ void HttpServer::handleGetCameraStream(AsyncWebServerRequest* request) {
     return i;
   });
 
-  request->send(response);
+  request.rawRequest->send(response);
 }
 
-void HttpServer::handleGetCameraStill(AsyncWebServerRequest* request) {
+void HttpServer::handleGetCameraStill(RequestContext& request) {
   CameraController::CameraStream& cameraStream = camera.openCaptureStream();
 
-  auto* response = request->beginChunkedResponse("image/jpeg", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+  auto* response = request.rawRequest->beginChunkedResponse("image/jpeg", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
     for (size_t i = 0; i < maxLen; i++) {
       if (cameraStream.available()) {
         buffer[i] = cameraStream.read();
@@ -229,43 +153,36 @@ void HttpServer::handleGetCameraStill(AsyncWebServerRequest* request) {
     return maxLen;
   });
 
-  request->send(response);
+  request.rawRequest->send(response);
 }
 
-void HttpServer::handleUpdateSettings(
-    AsyncWebServerRequest* request,
-    uint8_t* data,
-    size_t len,
-    size_t index,
-    size_t total
-) {
-  DynamicJsonBuffer buffer;
-  JsonObject& req = buffer.parse(data);
+void HttpServer::handleUpdateSettings(RequestContext& request) {
+  JsonObject req = request.getJsonBody().as<JsonObject>();
 
-  if (! req.success()) {
-    request->send_P(400, TEXT_PLAIN, PSTR("Invalid JSON"));
+  if (req.isNull()) {
+    request.response.json["error"] = "Invalid JSON";
+    request.response.setCode(400);
     return;
   }
 
   ConfigurationDictionary params;
 
   for (JsonObject::iterator it = req.begin(); it != req.end(); ++it) {
-    params[it->key] = it->value.as<String>();
+    params[it->key().c_str()] = it->value().as<String>();
   }
 
   settings.setFromDictionary(params);
   Bleeper.storage.persist();
 
-  request->send(200, APPLICATION_JSON, getSettingsBody().c_str());
+  handleListSettings(request);
 }
 
-void HttpServer::handleListSettings(AsyncWebServerRequest* request) {
-  request->send(200, APPLICATION_JSON, getSettingsBody().c_str());
+void HttpServer::handleListSettings(RequestContext& request) {
+  request.response.sendRaw(200, APPLICATION_JSON, getSettingsBody().c_str());
 }
 
 String HttpServer::getSettingsBody() {
-  DynamicJsonBuffer buffer;
-  JsonObject& json = buffer.createObject();
+  DynamicJsonDocument json(2048);
 
   ConfigurationDictionary params = settings.getAsDictionary(true);
   for (std::map<String, String>::const_iterator it = params.begin(); it != params.end(); ++it) {
@@ -273,74 +190,50 @@ String HttpServer::getSettingsBody() {
   }
 
   String strJson;
-  json.printTo(strJson);
+  serializeJson(json, strJson);
 
   return strJson;
 }
 
 ////////============== Handler wrappers
 
-bool HttpServer::isAuthenticated(AsyncWebServerRequest* request) {
-  if (settings.http.hasAuthSettings()) {
-    if (request->authenticate(settings.http.username.c_str(), settings.http.password.c_str())) {
-      return true;
-    } else {
-      request->send_P(403, TEXT_PLAIN, PSTR("Authentication required"));
-      return false;
-    }
-  } else {
-    return true;
-  }
-}
-
-void HttpServer::handleCreateFile(
-  const char* filePrefix,
-  AsyncWebServerRequest *request,
-  const String& filename,
-  size_t index,
-  uint8_t *data,
-  size_t len,
-  bool isFinal//,
-  // const UrlTokenBindings* bindings
-) {
+void HttpServer::handleCreateFile(const char* filePrefix, RequestContext& request) {
   static File updateFile;
 
-  if (index == 0) {
-    String path = String(filePrefix) + "/" + filename;
+  if (request.upload.index == 0) {
+    String path = String(filePrefix) + "/" + request.upload.filename;
     updateFile = SPIFFS.open(path, FILE_WRITE);
     Serial.println(F("Writing to file: "));
     Serial.println(path);
 
     if (!updateFile) {
-      Serial.println(F("Failed to open file"));
-      request->send(500);
+      request.response.json["error"] = F("Failed to open file");
+      request.response.setCode(500);
       return;
     }
   }
 
-  if (!updateFile || updateFile.write(data, len) != len) {
-    Serial.println(F("Failed to write to file"));
-    request->send(500);
+  if (!updateFile || updateFile.write(request.upload.data, request.upload.length) != request.upload.length) {
+    request.response.json["error"] = F("Failed to write to file");
+    request.response.setCode(500);
   }
 
-  if (updateFile && isFinal) {
+  if (updateFile && request.upload.isFinal) {
     updateFile.close();
-    request->send(200);
+    request.response.json["success"] = true;
   }
 }
 
-void HttpServer::handleListDirectory(AsyncWebServerRequest* request, const char* dirName) {
-  DynamicJsonBuffer buffer;
-  JsonArray& responseObj = buffer.createArray();
+void HttpServer::handleListDirectory(const char* dirName, RequestContext& request) {
+  JsonArray response = request.response.json.to<JsonArray>();
 
 #if defined(ESP8266)
   Dir dir = SPIFFS.openDir(dirName);
 
   while (dir.next()) {
-    JsonObject& file = buffer.createObject();
+    JsonObject file = response.createNestedObject();
     file["name"] = dir.fileName();
     file["size"] = dir.fileSize();
-    responseObj.add(file);
   }
 #elif defined(ESP32)
   File dir = SPIFFS.open(dirName);
@@ -349,22 +242,16 @@ void HttpServer::handleListDirectory(AsyncWebServerRequest* request, const char*
     Serial.print(F("Path is not a directory - "));
     Serial.println(dirName);
 
-    request->send_P(500, TEXT_PLAIN, PSTR("Expected path to be a directory, but wasn't"));
+    request.response.setCode(500);
+    request.response.json["error"] = F("Expected path to be a directory, but wasn't");
     return;
   }
 
   while (File dirFile = dir.openNextFile()) {
-    JsonObject& file = buffer.createObject();
+    JsonObject file = response.createNestedObject();
 
     file["name"] = String(dirFile.name());
     file["size"] = dirFile.size();
-
-    responseObj.add(file);
   }
 #endif
-
-  String response;
-  responseObj.printTo(response);
-
-  request->send(200, APPLICATION_JSON, response);
 }
