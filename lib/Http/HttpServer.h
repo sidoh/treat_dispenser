@@ -25,8 +25,9 @@ public:
   void begin();
 
 private:
-  RichHttpServer<RichHttpConfig> server;
   Settings& settings;
+  PassthroughAuthProvider<HttpSettings> authProvider;
+  RichHttpServer<RichHttpConfig> server;
   MotorController& motor;
   CameraController& camera;
   AudioController& audio;

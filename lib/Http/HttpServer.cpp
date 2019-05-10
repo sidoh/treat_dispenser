@@ -2,6 +2,7 @@
 #include <Bleeper.h>
 #include <ArduinoJson.h>
 #include <HttpServer.h>
+#include <AuthProviders.h>
 
 #if defined(ESP8266)
 #include <Updater.h>
@@ -17,11 +18,12 @@ static const char TEXT_PLAIN[] = "text/plain";
 static const char JPEG_CONTENT_TYPE_HEADER[] PROGMEM = "--frame\r\nContent-Type: image/jpeg\r\n\r\n";
 
 HttpServer::HttpServer(Settings& settings, CameraController& camera, MotorController& motor, AudioController& audio)
-  : audio(audio),
-    camera(camera),
-    motor(motor),
-    server(RichHttpServer<RichHttpConfig>(settings.http.port)),
-    settings(settings)
+  : settings(settings)
+  , authProvider(settings.http)
+  , server(RichHttpServer<RichHttpConfig>(settings.http.port, authProvider))
+  , motor(motor)
+  , camera(camera)
+  , audio(audio)
 { }
 
 void HttpServer::begin() {

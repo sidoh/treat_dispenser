@@ -44,7 +44,9 @@ public:
   persistentStringVar(username, "");
   persistentStringVar(password, "");
 
-  bool hasAuthSettings() const;
+  bool isAuthenticationEnabled() const;
+  const String& getUsername() const;
+  const String& getPassword() const;
 };
 
 class MotorSettings : public Configuration {
@@ -59,8 +61,8 @@ public:
   persistentFloatVar(dispense_jitter_num_turns, 0.1);
 
   persistentVar(
-    bool, 
-    auto_enable, 
+    bool,
+    auto_enable,
     true,
     {
       if (auto_enableString.equalsIgnoreCase("true")) {
