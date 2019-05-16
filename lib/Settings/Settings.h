@@ -7,6 +7,17 @@
 #define SOUNDS_DIRECTORY "/s"
 #endif
 
+#define XQUOTE(x) #x
+#define QUOTE(x) XQUOTE(x)
+
+#ifndef FIRMWARE_VARIANT
+#define FIRMWARE_VARIANT unknown
+#endif
+
+#ifndef TREAT_DISPENSER_VERSION
+#define TREAT_DISPENSER_VERSION unknown
+#endif
+
 #ifndef _SETTINGS_H
 #define _SETTINGS_H
 

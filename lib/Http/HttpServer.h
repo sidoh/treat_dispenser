@@ -37,6 +37,9 @@ private:
   void handleUpdateSettings(RequestContext& request);
   void handleListSettings(RequestContext& request);
 
+  // General info routes
+  void handleAbout(RequestContext& request);
+
   // Camera
   void handleGetCameraStill(RequestContext& request);
   void handleGetCameraStream(RequestContext& request);

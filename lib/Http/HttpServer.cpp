@@ -59,6 +59,10 @@ void HttpServer::begin() {
     .handleOTA();
 
   server
+    .buildHandler("/about")
+    .on(HTTP_GET, std::bind(&HttpServer::handleAbout, this, _1));
+
+  server
     .buildHandler("/audio/commands")
     .on(HTTP_POST, std::bind(&HttpServer::handlePostAudioCommand, this, _1));
 
@@ -195,6 +199,16 @@ String HttpServer::getSettingsBody() {
   serializeJson(json, strJson);
 
   return strJson;
+}
+
+void HttpServer::handleAbout(RequestContext& request) {
+  // Measure before allocating buffers
+  uint32_t freeHeap = ESP.getFreeHeap();
+
+  request.response.json["version"] = QUOTE(TREAT_DISPENSER_VERSION);
+  request.response.json["variant"] = QUOTE(FIRMWARE_VARIANT);
+  request.response.json["free_heap"] = freeHeap;
+  request.response.json["sdk_version"] = ESP.getSdkVersion();
 }
 
 ////////============== Handler wrappers
