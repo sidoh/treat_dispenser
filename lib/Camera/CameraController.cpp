@@ -7,14 +7,17 @@
 // for some constants...
 #include <ESPAsyncWebServer.h>
 
+static const char JPEG_CONTENT_TYPE_HEADER[] PROGMEM = "--frame\r\nContent-Type: image/jpeg\r\n\r\n";
+
 CameraBuffer::CameraBuffer(const CameraFrame& frame)
   : frame(frame)
   , bufferIx(0)
-  , frameRead(false)
+  , readStarted(false)
 { }
 
 void CameraBuffer::reset() {
   this->bufferIx = 0;
+  this->readStarted = false;
 }
 
 size_t CameraBuffer::copy(uint8_t* buffer, size_t maxLen) {
@@ -35,7 +38,7 @@ CameraController::CameraController(Settings& settings)
   , cameraFrame(std::make_shared<CameraFrame>())
   , readFrameMtx(xSemaphoreCreateCounting(10, 0))
   , sendFrameMtx(xSemaphoreCreateCounting(1, 0))
-  , sendingCount(xSemaphoreCreateCounting(10, 0))
+  , bufferMtx(xSemaphoreCreateBinary())
 {
   TaskHandle_t copyTask = NULL;
   xTaskCreate(
@@ -186,17 +189,17 @@ void CameraController::CameraStream::open() {
   this->isOpen = true;
 }
 
-CameraController::CallbackFn CameraController::chunkedResponseCallback() {
+CameraController::CallbackFn CameraController::chunkedResponseCallback(bool continuous) {
   std::shared_ptr<CameraBuffer> cameraBuffer = std::make_shared<CameraBuffer>(getCameraFrame());
 
   // Don't request new frame if a send is already in progress.  Instead, just re-send the
-  // same frame.
-  if (uxSemaphoreGetCount(sendingCount) == 0) {
+  // same frame.  If sending continuously, always request a new frame.
+  if (continuous || uxSemaphoreGetCount(sendingCount) == 0) {
     if (xSemaphoreGive(readFrameMtx) != pdTRUE) {
       Serial.println("ERROR: could not give read frame mutex");
     }
   } else {
-    cameraBuffer->frameRead = true;
+    cameraBuffer->readStarted = true;
   }
 
   // This is a counter for how many things are reading.  The semaphore will be taken back
@@ -207,14 +210,26 @@ CameraController::CallbackFn CameraController::chunkedResponseCallback() {
   // to be cleverer if this happens often enough.
   xSemaphoreGive(sendingCount);
 
-  return [this, cameraBuffer](uint8_t* buffer, size_t maxLen, size_t index) -> size_t {
-    if (cameraBuffer->frameRead || xSemaphoreTake(sendFrameMtx, portMAX_DELAY) == pdTRUE) {
-      cameraBuffer->frameRead = true;
+  return [this, cameraBuffer, continuous](uint8_t* buffer, size_t maxLen, size_t index) -> size_t {
+    size_t i = 0;
 
-      size_t readBytes = cameraBuffer->copy(buffer, maxLen);
+    if (!cameraBuffer->readStarted && continuous) {
+      strcpy_P((char*)buffer, JPEG_CONTENT_TYPE_HEADER);
+      i = strlen_P(JPEG_CONTENT_TYPE_HEADER);
+    }
+
+    if (cameraBuffer->readStarted || xSemaphoreTake(sendFrameMtx, portMAX_DELAY) == pdTRUE) {
+      cameraBuffer->readStarted = true;
+
+      size_t readBytes = i + cameraBuffer->copy(buffer + i, maxLen - i);
 
       if (cameraBuffer->done()) {
-        xSemaphoreTake(sendingCount, 0); // don't need to wait
+        if (continuous) {
+          xSemaphoreGive(readFrameMtx);
+          cameraBuffer->reset();
+        } else {
+          xSemaphoreTake(sendingCount, 0); // don't need to wait
+        }
       }
 
       return readBytes;

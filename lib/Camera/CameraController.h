@@ -26,7 +26,7 @@ struct CameraBuffer {
 
   const CameraFrame& frame;
   size_t bufferIx;
-  bool frameRead;
+  bool readStarted;
 };
 
 class CameraController {
@@ -53,7 +53,7 @@ public:
   void init();
   const CameraFrame& getCameraFrame();
 
-  CallbackFn chunkedResponseCallback();
+  CallbackFn chunkedResponseCallback(bool continuous = false);
 
 private:
   ArduCAM camera;
@@ -68,7 +68,7 @@ private:
   TaskHandle_t copyTask;
   SemaphoreHandle_t readFrameMtx;
   SemaphoreHandle_t sendFrameMtx;
-  SemaphoreHandle_t sendingCount;
+  SemaphoreHandle_t bufferMtx;
 };
 
 #endif

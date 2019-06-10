@@ -23,13 +23,12 @@ WiFiManager wifiManager;
 void setup() {
   Serial.begin(112500);
 
+  SPIFFS.begin();
+
   Bleeper.verbose()
       .configuration
-      .set(&settings)
-      .done()
-      .storage
-      .set(new SPIFFSStorage())
-      .done()
+        .set(&settings)
+        .done()
       .init();
 
   SPI.begin();

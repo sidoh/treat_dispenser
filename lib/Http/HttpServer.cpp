@@ -15,8 +15,6 @@ using namespace std::placeholders;
 static const char APPLICATION_JSON[] = "application/json";
 static const char TEXT_PLAIN[] = "text/plain";
 
-static const char JPEG_CONTENT_TYPE_HEADER[] PROGMEM = "--frame\r\nContent-Type: image/jpeg\r\n\r\n";
-
 HttpServer::HttpServer(Settings& settings, CameraController& camera, MotorController& motor, AudioController& audio)
   : settings(settings)
   , authProvider(settings.http)
@@ -122,47 +120,18 @@ void HttpServer::handlePostAudioCommand(RequestContext& request) {
 }
 
 void HttpServer::handleGetCameraStream(RequestContext& request) {
-  CameraController::CameraStream& cameraStream = camera.openCaptureStream();
+  CameraController::CallbackFn callback = camera.chunkedResponseCallback();
 
-  auto* response = request.rawRequest->beginChunkedResponse("multipart/x-mixed-replace; boundary=frame", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-    size_t i = 0;
-
-    if (index == 0 || !cameraStream.available()) {
-      strcpy_P((char*)buffer, JPEG_CONTENT_TYPE_HEADER);
-      i = strlen_P(JPEG_CONTENT_TYPE_HEADER);
-    }
-
-    if (!cameraStream.available()) {
-      cameraStream.close();
-      cameraStream.open();
-    }
-
-    for (; i < maxLen && cameraStream.available(); i++) {
-      buffer[i] = cameraStream.read();
-    }
-
-    return i;
-  });
+  auto* response = request.rawRequest->beginChunkedResponse(
+    "multipart/x-mixed-replace; boundary=frame",
+    camera.chunkedResponseCallback(true)
+  );
 
   request.rawRequest->send(response);
 }
 
 void HttpServer::handleGetCameraStill(RequestContext& request) {
-  CameraController::CameraStream& cameraStream = camera.openCaptureStream();
-
-  auto* response = request.rawRequest->beginChunkedResponse("image/jpeg", [this, &cameraStream](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-    for (size_t i = 0; i < maxLen; i++) {
-      if (cameraStream.available()) {
-        buffer[i] = cameraStream.read();
-      } else {
-        cameraStream.close();
-        return i;
-      }
-    }
-
-    return maxLen;
-  });
-
+  auto* response = request.rawRequest->beginChunkedResponse("image/jpeg", camera.chunkedResponseCallback());
   request.rawRequest->send(response);
 }
 
@@ -223,8 +192,6 @@ void HttpServer::handleCreateFile(const char* filePrefix, RequestContext& reques
   if (request.upload.index == 0) {
     String path = String(filePrefix) + "/" + request.upload.filename;
     updateFile = SPIFFS.open(path, FILE_WRITE);
-    Serial.println(F("Writing to file: "));
-    Serial.println(path);
 
     if (!updateFile) {
       request.response.json["error"] = F("Failed to open file");
