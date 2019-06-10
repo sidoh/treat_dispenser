@@ -4,25 +4,48 @@
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
 
-CameraController::CameraController(Settings& settings)
-  : camera(ArduCAM(OV2640, SS)),
-    settings(settings),
-    captureStream(CameraStream(camera))
-{
-  TaskHandle_t xHandle = NULL;
-  xTaskCreate(
-    &captureStream.taskImpl,
-    "ArduCAM_Capture",
-    2048,
-    (void*)(&captureStream),
-    0,
-    &xHandle
-  );
+// for some constants...
+#include <ESPAsyncWebServer.h>
+
+CameraBuffer::CameraBuffer(const CameraFrame& frame)
+  : frame(frame)
+  , bufferIx(0)
+  , frameRead(false)
+{ }
+
+void CameraBuffer::reset() {
+  this->bufferIx = 0;
 }
 
-CameraController::CameraStream& CameraController::openCaptureStream() {
-  captureStream.open();
-  return captureStream;
+size_t CameraBuffer::copy(uint8_t* buffer, size_t maxLen) {
+  size_t toCopy = std::min(maxLen, this->frame.length - this->bufferIx);
+  memcpy(buffer, this->frame.bytes + this->bufferIx, toCopy);
+  this->bufferIx += toCopy;
+  return toCopy;
+}
+
+bool CameraBuffer::done() {
+  return this->bufferIx >= this->frame.length;
+}
+
+CameraController::CameraController(Settings& settings)
+  : camera(ArduCAM(OV2640, SS))
+  , settings(settings)
+  , captureStream(CameraStream(camera))
+  , cameraFrame(std::make_shared<CameraFrame>())
+  , readFrameMtx(xSemaphoreCreateCounting(10, 0))
+  , sendFrameMtx(xSemaphoreCreateCounting(1, 0))
+  , sendingCount(xSemaphoreCreateCounting(10, 0))
+{
+  TaskHandle_t copyTask = NULL;
+  xTaskCreate(
+    &CameraController::readCameraFrame,
+    "ArduCAM_Capture",
+    2048,
+    (void*)(this),
+    0,
+    &copyTask
+  );
 }
 
 void CameraController::init() {
@@ -91,49 +114,55 @@ void CameraController::init() {
   }
 }
 
-void CameraController::CameraStream::taskImpl(void* _this) {
-  ((CameraController::CameraStream*)_this)->taskImpl();
+size_t CameraController::CameraStream::read(uint8_t* buffer, size_t maxLen) {
+  if (isOpen && this->bytesRemaining > 0) {
+    size_t toRead = std::min(static_cast<size_t>(maxLen), static_cast<size_t>(this->bytesRemaining));
+
+    SPI.transferBytes(buffer, buffer, toRead);
+    this->bytesRemaining -= toRead;
+
+    if (!this->bytesRemaining) {
+      isOpen = false;
+    }
+
+    return toRead;
+  }
+  return 0;
 }
 
-void CameraController::CameraStream::taskImpl() {
-  TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
-  TIMERG0.wdt_feed=1;
-  TIMERG0.wdt_wprotect=0;
-  while (1) {
-    if (isOpen && bufferIx >= CAMERA_BUFFER_SIZE && this->bytesRemaining > 0) {
-      size_t toRead = std::min((size_t)CAMERA_BUFFER_SIZE, (size_t)this->bytesRemaining);
+CameraController::CameraStream::CameraStream(ArduCAM& camera)
+  : camera(camera)
+  , bytesRemaining(0)
+{ }
 
-      SPI.transferBytes(buffer, buffer, toRead);
+void CameraController::readCameraFrame(void* _this) {
+  static_cast<CameraController*>(_this)->readCameraFrame();
+}
 
-      bufferLen = toRead;
-      bytesRemaining -= toRead;
-
-      if (!bytesRemaining) {
-        isOpen = false;
+void CameraController::readCameraFrame() {
+  while (true) {
+    if (xSemaphoreTake(readFrameMtx, portMAX_DELAY) == pdTRUE) {
+      captureStream.open();
+      size_t readBytes = captureStream.read(this->cameraFrame->bytes, MAX_CAMERA_FRAME_SIZE);
+      captureStream.close();
+      if (readBytes >= MAX_CAMERA_FRAME_SIZE) {
+        Serial.println(F("ERROR: read frame was too large!"));
       }
+      this->cameraFrame->length = readBytes;
 
-      bufferIx = 0;
-    } else {
-      vTaskDelay(portTICK_PERIOD_MS / 10);
+      xSemaphoreGive(sendFrameMtx);
     }
   }
 }
 
-CameraController::CameraStream::CameraStream(ArduCAM& camera)
-  : bufferIx(CAMERA_BUFFER_SIZE),
-    camera(camera),
-    bytesRemaining(0)
-{
-  cameraLock = xSemaphoreCreateMutex();
+void CameraController::CameraStream::close() {
 }
 
-void CameraController::CameraStream::close() {
-  // xSemaphoreGive(cameraLock);
+const CameraFrame& CameraController::getCameraFrame() {
+  return *this->cameraFrame;
 }
 
 void CameraController::CameraStream::open() {
-  // xSemaphoreTake(cameraLock, portMAX_DELAY);
-
   camera.flush_fifo();
   camera.clear_fifo_flag();
   camera.start_capture();
@@ -154,30 +183,41 @@ void CameraController::CameraStream::open() {
   camera.set_fifo_burst();
   SPI.transfer(0x00);
 
-  isOpen = true;
-  bufferIx = CAMERA_BUFFER_SIZE;
+  this->isOpen = true;
 }
 
-int CameraController::CameraStream::available() {
-  return bufferIx < bufferLen || bytesRemaining > 0;
-}
+CameraController::CallbackFn CameraController::chunkedResponseCallback() {
+  std::shared_ptr<CameraBuffer> cameraBuffer = std::make_shared<CameraBuffer>(getCameraFrame());
 
-int CameraController::CameraStream::read() {
-  while (bufferIx >= bufferLen);
+  // Don't request new frame if a send is already in progress.  Instead, just re-send the
+  // same frame.
+  if (uxSemaphoreGetCount(sendingCount) == 0) {
+    if (xSemaphoreGive(readFrameMtx) != pdTRUE) {
+      Serial.println("ERROR: could not give read frame mutex");
+    }
+  } else {
+    cameraBuffer->frameRead = true;
+  }
 
-  return buffer[bufferIx++];
-}
+  // This is a counter for how many things are reading.  The semaphore will be taken back
+  // when the whole frame has been sent.
+  //
+  // NOTE: seems like this could bug out if a frame is partially sent.  Effect, I believe,
+  // would be that the same frame would be sent again and again until reboot.  Will need
+  // to be cleverer if this happens often enough.
+  xSemaphoreGive(sendingCount);
 
-int CameraController::CameraStream::peek() {
-  while (bufferIx >= bufferLen);
+  return [this, cameraBuffer](uint8_t* buffer, size_t maxLen, size_t index) -> size_t {
+    if (cameraBuffer->frameRead || xSemaphoreTake(sendFrameMtx, portMAX_DELAY) == pdTRUE) {
+      cameraBuffer->frameRead = true;
 
-  return buffer[bufferIx];
-}
+      size_t readBytes = cameraBuffer->copy(buffer, maxLen);
 
-void CameraController::CameraStream::flush() {
-  // Doesn't do anything
-}
+      if (cameraBuffer->done()) {
+        xSemaphoreTake(sendingCount, 0); // don't need to wait
+      }
 
-size_t CameraController::CameraStream::write(uint8_t byte) {
-  // Doesn't do anything
+      return readBytes;
+    }
+  };
 }
