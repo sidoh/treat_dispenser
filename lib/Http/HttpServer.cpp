@@ -52,7 +52,11 @@ void HttpServer::begin() {
   server
     .buildHandler("/sounds")
     .on(HTTP_GET, std::bind(&HttpServer::handleListDirectory, this, SOUNDS_DIRECTORY, _1))
-    .on(HTTP_POST, std::bind(&HttpServer::handleCreateFile, this, SOUNDS_DIRECTORY, _1));
+    .on(
+      HTTP_POST,
+      std::bind(&HttpServer::handleListDirectory, this, SOUNDS_DIRECTORY, _1),
+      std::bind(&HttpServer::handleCreateFile, this, SOUNDS_DIRECTORY, _1)
+    );
 
   server
     .buildHandler("/firmware")
