@@ -33,9 +33,9 @@ public:
 private:
   Settings& settings;
 
-  AudioOutputI2S* audioOutput;
-  AudioGenerator* audioGenerator;
-  AudioFileSource* audioSource;
+  std::shared_ptr<AudioOutputI2S> audioOutput;
+  std::shared_ptr<AudioGenerator> audioGenerator;
+  std::shared_ptr<AudioFileSource> audioSource;
 
   String filenameToPlay;
   volatile bool requestPending;
