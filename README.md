@@ -100,10 +100,10 @@ We use the builtin DAC (channel 1) and a Class D amplifier:
 | Gnd | Gnd | |
 | VDD | 5v | |
 | ~EN | GPIO16 | |
-| MS1 | 17 | |
-| MS2 | 26 | |
-| MS3 | 27 | |
-| STEP | 14 | |
+| MS1 | GPIO17 | |
+| MS2 | GPIO26 | |
+| MS3 | GPIO27 | |
+| STEP | GPIO14 | |
 
 Bipolar motors have two positive/negative pairs.  You can find them by connecting two arbitrary wires and checking if you can turn the motor shaft with your hand.  If you can't, or if there's a lot of resistance, you've got a pair.  If not, pair it with one of the other wires.
 
