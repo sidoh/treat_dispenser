@@ -146,8 +146,8 @@ void HttpServer::handleUpdateSettings(RequestContext& request) {
 
   ConfigurationDictionary params;
 
-  for (JsonObject::iterator it = req.begin(); it != req.end(); ++it) {
-    params[it->key().c_str()] = it->value().as<String>();
+  for (JsonPair kv : req) {
+    params[kv.key().c_str()] = kv.value().as<char*>();
   }
 
   settings.setFromDictionary(params);
