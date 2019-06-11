@@ -145,6 +145,7 @@ void CameraController::readCameraFrame(void* _this) {
 void CameraController::readCameraFrame() {
   while (true) {
     if (xSemaphoreTake(readFrameMtx, portMAX_DELAY) == pdTRUE) {
+      xSemaphoreTake(bufferMtx, static_cast<TickType_t>(1000 / portTICK_PERIOD_MS));
       captureStream.open();
       size_t readBytes = captureStream.read(this->cameraFrame->bytes, MAX_CAMERA_FRAME_SIZE);
       captureStream.close();
@@ -153,6 +154,7 @@ void CameraController::readCameraFrame() {
       }
       this->cameraFrame->length = readBytes;
 
+      xSemaphoreGive(bufferMtx);
       xSemaphoreGive(sendFrameMtx);
     }
   }
@@ -194,21 +196,9 @@ CameraController::CallbackFn CameraController::chunkedResponseCallback(bool cont
 
   // Don't request new frame if a send is already in progress.  Instead, just re-send the
   // same frame.  If sending continuously, always request a new frame.
-  if (continuous || uxSemaphoreGetCount(sendingCount) == 0) {
-    if (xSemaphoreGive(readFrameMtx) != pdTRUE) {
-      Serial.println("ERROR: could not give read frame mutex");
-    }
-  } else {
-    cameraBuffer->readStarted = true;
+  if (xSemaphoreGive(readFrameMtx) != pdTRUE) {
+    Serial.println("ERROR: could not give read frame mutex");
   }
-
-  // This is a counter for how many things are reading.  The semaphore will be taken back
-  // when the whole frame has been sent.
-  //
-  // NOTE: seems like this could bug out if a frame is partially sent.  Effect, I believe,
-  // would be that the same frame would be sent again and again until reboot.  Will need
-  // to be cleverer if this happens often enough.
-  xSemaphoreGive(sendingCount);
 
   return [this, cameraBuffer, continuous](uint8_t* buffer, size_t maxLen, size_t index) -> size_t {
     size_t i = 0;
@@ -219,16 +209,20 @@ CameraController::CallbackFn CameraController::chunkedResponseCallback(bool cont
     }
 
     if (cameraBuffer->readStarted || xSemaphoreTake(sendFrameMtx, portMAX_DELAY) == pdTRUE) {
+      if (!cameraBuffer->readStarted) {
+        xSemaphoreTake(bufferMtx, portMAX_DELAY);
+      }
+
       cameraBuffer->readStarted = true;
 
       size_t readBytes = i + cameraBuffer->copy(buffer + i, maxLen - i);
 
       if (cameraBuffer->done()) {
+        xSemaphoreGive(bufferMtx);
+
         if (continuous) {
           xSemaphoreGive(readFrameMtx);
           cameraBuffer->reset();
-        } else {
-          xSemaphoreTake(sendingCount, 0); // don't need to wait
         }
       }
 
