@@ -42,10 +42,16 @@ Play audio files
 
 * Play an audio file: `POST /audio/commands`\
   Example body: `{"file":"/s/my_audio_file.mp3"}`
-  
+
 ### Motor Commands
 
 Control the motor
 
 * Send a command to the motor controller: `POST /motor/commands`\
   Example body: `{"type":"dispense"}`
+
+### About
+
+Retrieve system information
+
+* Get system informat: `GET /about`
