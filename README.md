@@ -1,4 +1,4 @@
-# Treat Dispenser
+# Treat Dispenser [![Build Status](https://travis-ci.org/sidoh/treat_dispenser.svg?branch=master)](https://travis-ci.org/sidoh/treat_dispenser)
 
 Software for an ESP32-driven, Internet-connected pet treat dispenser.
 
