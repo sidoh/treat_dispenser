@@ -55,3 +55,56 @@ Control the motor
 Retrieve system information
 
 * Get system informat: `GET /about`
+
+## Default Pin Mappings
+
+There's a really sloppy Fritzing diagram checked into the project.  Otherwise, here are some pin mappings:
+
+### Camera
+
+The ArduCAM module is hooked up to the default I2S and VSPI bus on the ESP32.
+
+| **ArduCAM**  | **ESP32**  |
+|---|---|
+|  CS | GPIO5 |
+| MOSI | GPIO23 |
+| MISO | GPIO19 |
+| SCK | GPIO18 |
+|GND | Gnd |
+| VCC | 3.3v |
+| SDA | GPIO21 |
+| SCL | GPIO22 |
+
+### Audio
+
+We use the builtin DAC (channel 1) and a Class D amplifier:
+
+| **Class D Amp** | **ESP32** |
+|---|---|---|
+| Audio In- | Gnd |
+| Audio In+ | GPIO25 |
+| Enable | GPIO16 |
+| Gnd | Gnd |
+| Vin | 5v |
+
+| **Class D Amp** | **Speaker** |
+|---|---|
+| Audio Out- | Gnd |
+| Audio Out+ | Vin |
+
+### Motor
+
+| **A4988** | **ESP32** | Notes |
+|--|--|--|--|
+| VMOT | N/A | Connect to 12v w/ inline 100 uF capacitor
+| Gnd | Gnd | |
+| VDD | 5v | |
+| ~EN | GPIO16 | |
+| MS1 | 17 | |
+| MS2 | 26 | |
+| MS3 | 27 | |
+| STEP | 14 | |
+
+Bipolar motors have two positive/negative pairs.  You can find them by connecting two arbitrary wires and checking if you can turn the motor shaft with your hand.  If you can't, or if there's a lot of resistance, you've got a pair.  If not, pair it with one of the other wires.
+
+Connect one pair to 1A and 1B, and the other to 2A and 2B on the A4988.
