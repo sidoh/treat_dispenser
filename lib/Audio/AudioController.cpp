@@ -3,19 +3,18 @@
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
 
-AudioController::AudioController(Settings& settings) 
+AudioController::AudioController(Settings& settings)
   : settings(settings),
     audioGenerator(NULL),
     audioOutput(NULL),
-    audioSource(new AudioFileSourceSPIFFS()),
+    audioSource(std::make_shared<AudioFileSourceSPIFFS>()),
     mutex(xSemaphoreCreateMutex()),
     requestPending(false)
-{ 
-  audioOutput = new AudioOutputI2S(0, AudioOutputI2S::INTERNAL_DAC);
+{
+  audioOutput = std::make_shared<AudioOutputI2S>(0, AudioOutputI2S::INTERNAL_DAC);
 }
 
 AudioController::~AudioController() {
-  delete audioOutput;
 }
 
 void AudioController::init() {
@@ -50,8 +49,8 @@ void AudioController::loop() {
       printf_P(PSTR("Playing filename: %s, free heap: %d\n"), filenameToPlay.c_str(), ESP.getFreeHeap());
 
       audioSource->open(filenameToPlay.c_str());
-      audioGenerator = new AudioGeneratorMP3();
-      audioGenerator->begin(audioSource, audioOutput);
+      audioGenerator = std::make_shared<AudioGeneratorMP3>();
+      audioGenerator->begin(audioSource.get(), audioOutput.get());
 
       xSemaphoreGive(mutex);
     }
@@ -61,10 +60,6 @@ void AudioController::loop() {
     if (! audioGenerator->loop()) {
       disable();
       audioGenerator->stop();
-
-      delete audioGenerator;
-      audioGenerator = NULL;
-
       Serial.println(F("Audio not looping"));
     }
   } else {

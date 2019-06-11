@@ -4,7 +4,7 @@
 #include <MotorControler.h>
 #include <CameraController.h>
 #include <AudioController.h>
-#include <PathVariableHandler.h>
+#include <RichHttpServer.h>
 
 #if defined(ESP32)
 extern "C" {
@@ -15,6 +15,9 @@ extern "C" {
 #ifndef _HTTP_SERVER_H
 #define _HTTP_SERVER_H
 
+using RichHttpConfig = RichHttp::Generics::Configs::AsyncWebServer;
+using RequestContext = RichHttpConfig::RequestContextType;
+
 class HttpServer {
 public:
   HttpServer(Settings& settings, CameraController& camera, MotorController& motor, AudioController& audio);
@@ -22,96 +25,36 @@ public:
   void begin();
 
 private:
-  AsyncWebServer server;
   Settings& settings;
+  PassthroughAuthProvider<HttpSettings> authProvider;
+  RichHttpServer<RichHttpConfig> server;
   MotorController& motor;
   CameraController& camera;
   AudioController& audio;
 
   // Settings CRUD
   String getSettingsBody();
-  ArBodyHandlerFunction    handleUpdateSettings();
-  ArRequestHandlerFunction handleListSettings();
+  void handleUpdateSettings(RequestContext& request);
+  void handleListSettings(RequestContext& request);
+
+  // General info routes
+  void handleAbout(RequestContext& request);
 
   // Camera
-  ArRequestHandlerFunction handleGetCameraStill();
-  ArRequestHandlerFunction handleGetCameraStream();
+  void handleGetCameraStill(RequestContext& request);
+  void handleGetCameraStream(RequestContext& request);
 
   // Motor
-  ArBodyHandlerFunction    handlePostMotorCommand();
+  void handlePostMotorCommand(RequestContext& request);
 
   // Audio
-  PathVariableHandler::TPathVariableHandlerFn handleDeleteSound();
-  PathVariableHandler::TPathVariableHandlerFn handleShowSound();
-  ArBodyHandlerFunction             handlePostAudioCommand();
-
-  // OTA updates
-  ArUploadHandlerFunction  handleOtaUpdate();
-  ArRequestHandlerFunction handleOtaSuccess();
-
-  class BodyHandler : public AsyncWebHandler {
-  public:
-    BodyHandler(const char* uri, const WebRequestMethod method, ArBodyHandlerFunction handler);
-    ~BodyHandler();
-
-    virtual bool isRequestHandlerTrivial() override { return false; }
-    virtual bool canHandle(AsyncWebServerRequest* request) override;
-    virtual void handleRequest(AsyncWebServerRequest* request) override;
-    virtual void handleBody(
-      AsyncWebServerRequest *request,
-      uint8_t *data,
-      size_t len,
-      size_t index,
-      size_t total
-    ) override;
-
-  private:
-    char* uri;
-    const WebRequestMethod method;
-    ArBodyHandlerFunction handler;
-  };
-
-  class UploadHandler : public AsyncWebHandler {
-  public:
-    UploadHandler(const char* uri, const WebRequestMethod method, ArUploadHandlerFunction handler);
-    UploadHandler(const char* uri, const WebRequestMethod method, ArRequestHandlerFunction onCompleteFn, ArUploadHandlerFunction handler);
-    ~UploadHandler();
-
-    virtual bool isRequestHandlerTrivial() override { return false; }
-    virtual bool canHandle(AsyncWebServerRequest* request) override;
-    virtual void handleRequest(AsyncWebServerRequest* request) override;
-    virtual void handleUpload(
-      AsyncWebServerRequest *request,
-      const String& filename,
-      size_t index,
-      uint8_t *data,
-      size_t len,
-      bool isFinal
-    ) override;
-
-  private:
-    char* uri;
-    const WebRequestMethod method;
-    ArUploadHandlerFunction handler;
-    ArRequestHandlerFunction onCompleteFn;
-  };
+  void handleDeleteSound(RequestContext& request);
+  void handleShowSound(RequestContext& request);
+  void handlePostAudioCommand(RequestContext& request);
 
   // General helpers
-  ArRequestHandlerFunction handleListDirectory(const char* dir);
-  ArUploadHandlerFunction  handleCreateFile(const char* filePrefix);
-
-  // Checks if auth is enabled, and requires appropriate username/password if so
-  bool isAuthenticated(AsyncWebServerRequest* request);
-
-  // Support for routes with tokens like a/:id/:id2. Injects auth handling.
-  void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerFn fn);
-  void onPattern(const String& pattern, const WebRequestMethod method, PathVariableHandler::TPathVariableHandlerBodyFn fn);
-
-  // Injects auth handling
-  void on(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction fn);
-  void on(const String& pattern, const WebRequestMethod method, ArBodyHandlerFunction fn);
-  void onUpload(const String& pattern, const WebRequestMethod method, ArUploadHandlerFunction uploadFn);
-  void onUpload(const String& pattern, const WebRequestMethod method, ArRequestHandlerFunction onCompleteFn, ArUploadHandlerFunction uploadFn);
+  void handleListDirectory(const char* dir, RequestContext& request);
+  void handleCreateFile(const char* filePrefix, RequestContext& request);
 };
 
 #endif

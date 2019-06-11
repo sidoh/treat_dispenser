@@ -7,6 +7,17 @@
 #define SOUNDS_DIRECTORY "/s"
 #endif
 
+#define XQUOTE(x) #x
+#define QUOTE(x) XQUOTE(x)
+
+#ifndef FIRMWARE_VARIANT
+#define FIRMWARE_VARIANT unknown
+#endif
+
+#ifndef TREAT_DISPENSER_VERSION
+#define TREAT_DISPENSER_VERSION unknown
+#endif
+
 #ifndef _SETTINGS_H
 #define _SETTINGS_H
 
@@ -44,7 +55,9 @@ public:
   persistentStringVar(username, "");
   persistentStringVar(password, "");
 
-  bool hasAuthSettings() const;
+  bool isAuthenticationEnabled() const;
+  const String& getUsername() const;
+  const String& getPassword() const;
 };
 
 class MotorSettings : public Configuration {
@@ -59,8 +72,8 @@ public:
   persistentFloatVar(dispense_jitter_num_turns, 0.1);
 
   persistentVar(
-    bool, 
-    auto_enable, 
+    bool,
+    auto_enable,
     true,
     {
       if (auto_enableString.equalsIgnoreCase("true")) {
@@ -76,7 +89,7 @@ public:
   persistentVar(
     MicrostepResolution,
     microstep_resolution,
-    MicrostepResolution::FULL,
+    MicrostepResolution::EIGHTH,
     {
       microstep_resolution = MotorTypes::microstepResolutionFromStr(microstep_resolutionString);
     },
@@ -99,7 +112,7 @@ public:
   persistentVar(
     MicrostepResolution,
     jitter_microstep_resolution,
-    MicrostepResolution::FULL,
+    MicrostepResolution::QUARTER,
     {
       jitter_microstep_resolution = MotorTypes::microstepResolutionFromStr(jitter_microstep_resolutionString);
     },
