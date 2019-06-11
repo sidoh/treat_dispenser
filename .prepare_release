@@ -19,10 +19,10 @@ prepare_log "Preparing release for tagged version: $VERSION"
 
 mkdir -p dist
 
-if [ -e "./pio/build" ]; then
-  firmware_prefix="./pio/build/"
+if [ -d .pio/build ]; then
+  firmware_prefix=".pio/build"
 else
-  firmware_pefix="./pioenvs/"
+  firmware_prefix=".pioenvs"
 fi
 
 for file in $(ls ${firmware_prefix}/**/firmware.bin); do
