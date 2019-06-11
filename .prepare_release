@@ -2,7 +2,7 @@
 
 set -eo pipefail
 
-PROJECT_NAME="epaper_templates"
+PROJECT_NAME="treat_dispenser"
 
 prepare_log() {
   echo "[prepare release] -- $@"
@@ -21,7 +21,7 @@ mkdir -p dist
 
 if [ -e "./pio/build" ]; then
   firmware_prefix="./pio/build/"
-elif
+else
   firmware_pefix="./pioenvs/"
 fi
 
