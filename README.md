@@ -80,7 +80,7 @@ The ArduCAM module is hooked up to the default I2S and VSPI bus on the ESP32.
 We use the builtin DAC (channel 1) and a Class D amplifier:
 
 | **Class D Amp** | **ESP32** |
-|---|---|---|
+|---|---|
 | Audio In- | Gnd |
 | Audio In+ | GPIO25 |
 | Enable | GPIO16 |
@@ -95,7 +95,7 @@ We use the builtin DAC (channel 1) and a Class D amplifier:
 ### Motor
 
 | **A4988** | **ESP32** | Notes |
-|--|--|--|--|
+|---|---|---|
 | VMOT | N/A | Connect to 12v w/ inline 100 uF capacitor
 | Gnd | Gnd | |
 | VDD | 5v | |
