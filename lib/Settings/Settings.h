@@ -89,7 +89,7 @@ public:
   persistentVar(
     MicrostepResolution,
     microstep_resolution,
-    MicrostepResolution::FULL,
+    MicrostepResolution::EIGHTH,
     {
       microstep_resolution = MotorTypes::microstepResolutionFromStr(microstep_resolutionString);
     },
@@ -112,7 +112,7 @@ public:
   persistentVar(
     MicrostepResolution,
     jitter_microstep_resolution,
-    MicrostepResolution::FULL,
+    MicrostepResolution::QUARTER,
     {
       jitter_microstep_resolution = MotorTypes::microstepResolutionFromStr(jitter_microstep_resolutionString);
     },
