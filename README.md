@@ -104,6 +104,8 @@ We use the builtin DAC (channel 1) and a Class D amplifier:
 | MS2 | GPIO26 | |
 | MS3 | GPIO27 | |
 | STEP | GPIO14 | |
+| ~RST | Vin | This and ~SLP should be tied HIGH. |
+| ~SLP | Vin | |
 
 Bipolar motors have two positive/negative pairs.  You can find them by connecting two arbitrary wires and checking if you can turn the motor shaft with your hand.  If you can't, or if there's a lot of resistance, you've got a pair.  If not, pair it with one of the other wires.
 
